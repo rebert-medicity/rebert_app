@@ -12,7 +12,7 @@ class Home extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Login App"),
+        title: const Text("Rebert Medicity"),
         elevation: 0,
         actions: [
           Padding(
@@ -47,7 +47,7 @@ class Home extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Text(
-              "Welcome 🎉",
+              "Bienvenido/a 🎉",
               style: Theme.of(context).textTheme.bodyLarge,
             ),
             const SizedBox(height: 10),
