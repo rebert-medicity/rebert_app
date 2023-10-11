@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
+final List<DropdownMenuEntry<String>> roles = <DropdownMenuEntry<String>>[
+  DropdownMenuEntry(value: '01', label: 'Médico'),
+  DropdownMenuEntry(value: '02', label: 'Paciente')
+];
+
 class Signup extends StatefulWidget {
   const Signup({super.key});
   @override
@@ -21,6 +26,7 @@ class _SignupState extends State<Signup> {
 
   final Box _boxAccounts = Hive.box("accounts");
   bool _obscurePassword = true;
+  String? selectedRole;
 
   @override
   Widget build(BuildContext context) {
@@ -66,6 +72,31 @@ class _SignupState extends State<Signup> {
                   return null;
                 },
                 onEditingComplete: () => _focusNodeEmail.requestFocus(),
+              ),
+              const SizedBox(height: 10),
+              DropdownMenu<String>(
+                label: const Text('Rol'),
+                dropdownMenuEntries: roles,
+                onSelected: (String? color) {
+                  setState(() {
+                    selectedRole = color;
+                  });
+                },
+                menuStyle: const MenuStyle(
+                  backgroundColor: MaterialStatePropertyAll(Colors.greenAccent),
+                ),
+                enableSearch: true,
+                hintText: 'Seleccionar un rol',
+                width: 435,
+                leadingIcon: const Icon(Icons.lock_outline),
+                inputDecorationTheme: InputDecorationTheme(
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
               ),
               const SizedBox(height: 10),
               TextFormField(
