@@ -45,43 +45,98 @@ class _TableRangeExampleState extends State<Home> {
       appBar: AppBar(
         title: Text('Agenda'),
       ),
-      floatingActionButton: FloatingActionButton(
-          onPressed: () {
-            _eventController.clear();
-          showDialog(
-              context: context,
-              builder: (context) {
-                return AlertDialog(
-                    scrollable:true,
-                    title: Text("Añadir un evento"),
-                    content: Padding(
-                        padding: EdgeInsets.all(8),
-                        child: TextField(
-                          controller: _eventController,
+      floatingActionButton: Row(
+        mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            FloatingActionButton(
+                onPressed: () {
+                  _eventController.clear();
+                  showDialog(
+                      context: context,
+                      builder: (context) {
+                        return AlertDialog(
+                          scrollable:true,
+                          title: Text("Añadir un evento"),
+                          content: Padding(
+                            padding: EdgeInsets.all(8),
+                            child: TextField(
+                              controller: _eventController,
+                            ),
+                          ),
+                          actions: [
+                            ElevatedButton(
+                                onPressed: (){
+                                  if (_selectedDay != null) {
+                                    List<Event> listaAux = _getEventsForDay(_selectedDay!);
+                                    listaAux.add(Event(_eventController.text));
+                                    events[_selectedDay!] = listaAux;
+                                    _selectedEvents.value = listaAux;
+                                  }else{
+                                    events.addAll({
+                                      _selectedDay!: [Event(_eventController.text)]
+                                    });
+                                    _selectedEvents.value=_getEventsForDay(_selectedDay!);
+                                  }
+                                  Navigator.of(context).pop();
+                                },
+                                child: Text("Agregar")
+                            )
+                          ],
+                        );
+                      });
+                },child: Icon(Icons.add)),
+            SizedBox(width: 16),
+            FloatingActionButton(
+                onPressed: () {
+                  _eventController.clear();
+                  showDialog(
+                    context: context,
+                    builder: (context) {
+                      return AlertDialog(
+                        scrollable: true,
+                        title: Text("Eventos del día"),
+                        content: Container(
+                          width: 300, // Tamaño personalizado
+                          height: 400, // Tamaño personalizado
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Expanded(
+                                child: ValueListenableBuilder<List<Event>>(
+                                  valueListenable: _selectedEvents,
+                                  builder: (context, value, _) {
+                                    return ListView.builder(
+                                      itemCount: value.length,
+                                      itemBuilder: (context, index) {
+                                        return Container(
+                                          margin: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                                          decoration: BoxDecoration(
+                                            border: Border.all(),
+                                            borderRadius: BorderRadius.circular(12),
+                                          ),
+                                          child: ListTile(
+                                            onTap: () {
+                                              print("Tapped item $index");
+                                            },
+                                            title: Text('${value[index]}'),
+                                          ),
+                                        );
+                                      },
+                                    );
+                                  },
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                    ),
-                    actions: [
-                      ElevatedButton(
-                          onPressed: (){
-                            if (_selectedDay != null) {
-                              List<Event> listaAux = _getEventsForDay(_selectedDay!);
-                              listaAux.add(Event(_eventController.text));
-                              events[_selectedDay!] = listaAux;
-                              _selectedEvents.value = listaAux;
-                            }else{
-                              events.addAll({
-                                _selectedDay!: [Event(_eventController.text)]
-                              });
-                              _selectedEvents.value=_getEventsForDay(_selectedDay!);
-                            }
-                            Navigator.of(context).pop();
-                          },
-                          child: Text("Agregar")
-                      )
-                    ],
-                );
-              });
-      },child: Icon(Icons.add)),
+                      );
+                    },
+                  );
+                },child: Icon(Icons.search))
+          ],
+      )
+
+      ,
       body: Column(
         children: [
           TableCalendar(
@@ -117,23 +172,6 @@ class _TableRangeExampleState extends State<Home> {
               _focusedDay = focusedDay;
             },
           ),
-          Expanded(
-              child: ValueListenableBuilder<List<Event>>(
-                valueListenable: _selectedEvents,
-                builder: (context, value, _){
-                  return ListView.builder(itemCount: value.length,itemBuilder: (context, index){
-                    return Container(
-                      margin: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                      decoration: BoxDecoration(
-                        border: Border.all(),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: ListTile(onTap: ()=> print(""), title: Text('${value[index]}'),),
-                    );
-                  });
-                },
-              )
-          )
         ],
       )
     );
