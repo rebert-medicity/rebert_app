@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:rebert_app/ui/home.dart';
 
 import 'ui/login.dart';
 
@@ -13,7 +14,7 @@ class MainApp extends StatelessWidget {
           seedColor: Color.fromARGB(255, 44, 141, 126),
         ),
       ),
-      home:  Login(),
+      home:  Home(),
     );
   }
 }
