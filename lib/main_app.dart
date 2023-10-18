@@ -14,7 +14,7 @@ class MainApp extends StatelessWidget {
           seedColor: Color.fromARGB(255, 44, 141, 126),
         ),
       ),
-      home:  Home(),
+      home:  Login(),
     );
   }
 }
