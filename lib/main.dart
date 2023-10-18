@@ -5,6 +5,7 @@ import 'package:intl/date_symbol_data_local.dart';
 
 void main() async {
   await _initHive();
+  await initializeDateFormatting('es', null);
   initializeDateFormatting().then((_) => runApp(MainApp()));
 }
 

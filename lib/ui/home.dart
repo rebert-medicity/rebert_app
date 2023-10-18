@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:table_calendar/table_calendar.dart';
-import 'login.dart'; // Asegúrate de importar 'login.dart' aquí si es necesario.
+import 'login.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import '../utils.dart';
+
 
 class Home extends StatefulWidget {
   @override
@@ -10,6 +11,8 @@ class Home extends StatefulWidget {
 }
 
 class _HomeState extends State<Home> {
+  String? _categorySelected;
+  List<String> categorys = ["Cita", "Medicina", "Otros"];
   CalendarFormat _calendarFormat = CalendarFormat.month;
   RangeSelectionMode _rangeSelectionMode = RangeSelectionMode.toggledOn;
   DateTime _focusedDay = DateTime.now();
@@ -87,40 +90,87 @@ class _HomeState extends State<Home> {
 
   void _addEvent() {
     _eventController.clear();
+    TimeOfDay? selectedTime;
     showDialog(
-        context: context,
-        builder: (context) {
-          return AlertDialog(
-            scrollable:true,
-            title: Text("Añadir un evento"),
-            content: Padding(
-              padding: EdgeInsets.all(8),
-              child: TextField(
-                controller: _eventController,
+      context: context,
+      builder: (context) {
+        String? categorySelected = categorys.first;
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setState) {
+            return AlertDialog(
+              scrollable: true,
+              title: Text("Añadir un evento"),
+              content: Column(
+                children: [
+                  DropdownButton<String>(
+                    value: categorySelected,
+                    onChanged: (String? newValue) {
+                      setState(() {
+                        categorySelected = newValue;
+                      });
+                    },
+                    items: categorys.map((String categoria) {
+                      return DropdownMenuItem<String>(
+                        value: categoria,
+                        child: Text(categoria),
+                      );
+                    }).toList(),
+                  ),
+                  TextField(
+                    controller: _eventController,
+                    decoration: InputDecoration(labelText: 'Evento'),
+                  ),
+                  Row(
+                    children: [
+                      Text('Hora: ${selectedTime?.format(context) ?? ''}'),
+                      IconButton(
+                        icon: Icon(Icons.access_time),
+                        onPressed: () async {
+                          selectedTime = await showTimePicker(
+                            context: context,
+                            initialTime: TimeOfDay.now(),
+                          );
+                          setState(() {});
+                        },
+                      ),
+                    ],
+                  ),
+                ],
               ),
-            ),
-            actions: [
-              ElevatedButton(
-                  onPressed: (){
+              actions: [
+                ElevatedButton(
+                  onPressed: () {
                     if (_selectedDay != null) {
                       List<Event> listaAux = _getEventsForDay(_selectedDay!);
-                      listaAux.add(Event(_eventController.text));
+                      listaAux.add(Event(
+                        categorySelected!,
+                        _eventController.text,
+                        selectedTime!,
+                      ));
                       events[_selectedDay!] = listaAux;
                       _selectedEvents.value = listaAux;
-                    }else{
+                    } else {
                       events.addAll({
-                        _selectedDay!: [Event(_eventController.text)]
+                        _selectedDay!: [Event(
+                          categorySelected!,
+                          _eventController.text,
+                          selectedTime!,
+                        )]
                       });
-                      _selectedEvents.value=_getEventsForDay(_selectedDay!);
+                      _selectedEvents.value = _getEventsForDay(_selectedDay!);
                     }
                     Navigator.of(context).pop();
                   },
-                  child: Text("Agregar")
-              )
-            ],
-          );
-        });
+                  child: Text("Agregar"),
+                )
+              ],
+            );
+          },
+        );
+      },
+    );
   }
+
 
   void _showDayEvents() {
     _eventController.clear();
@@ -141,8 +191,15 @@ class _HomeState extends State<Home> {
                     valueListenable: _selectedEvents,
                     builder: (context, value, _) {
                       return ListView.builder(
+                        shrinkWrap: true,
+                        physics: NeverScrollableScrollPhysics(),
                         itemCount: value.length,
                         itemBuilder: (context, index) {
+                          final event = value[index];
+                          final eventIndex = index + 1;
+                          final startTime = event.time;
+                          final description= event.description;
+
                           return Container(
                             margin: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                             decoration: BoxDecoration(
@@ -151,9 +208,10 @@ class _HomeState extends State<Home> {
                             ),
                             child: ListTile(
                               onTap: () {
-                                print("Tapped item $index");
+                                print("Tapped item $eventIndex: ${event.title}");
                               },
-                              title: Text('${value[index]}'),
+                              title: Text('${startTime.hour}:${startTime.minute}    ${event.title}'),
+                              subtitle: Text(description),
                             ),
                           );
                         },
