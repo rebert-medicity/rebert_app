@@ -171,10 +171,17 @@ class _HomeState extends State<Home> {
     );
   }
 
-
-  void _showDayEvents() {
+  List<BuildContext> _openDialogs = [];
+  Future<void> _showDayEvents() async {
     _eventController.clear();
-    showDialog(
+
+    for (BuildContext dialogContext in _openDialogs) {
+      Navigator.of(dialogContext).pop();
+    }
+
+    _openDialogs.clear();
+
+    bool? edited = await showDialog<bool>(
       context: context,
       builder: (context) {
         return AlertDialog(
@@ -190,15 +197,16 @@ class _HomeState extends State<Home> {
                   child: ValueListenableBuilder<List<Event>>(
                     valueListenable: _selectedEvents,
                     builder: (context, value, _) {
+                      final eventsForDay = _getEventsForDay(_selectedDay ?? DateTime.now());
                       return ListView.builder(
                         shrinkWrap: true,
                         physics: NeverScrollableScrollPhysics(),
-                        itemCount: value.length,
+                        itemCount: eventsForDay.length,
                         itemBuilder: (context, index) {
                           final event = value[index];
                           final eventIndex = index + 1;
                           final startTime = event.time;
-                          final description= event.description;
+                          final description = event.description;
 
                           return Container(
                             margin: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
@@ -212,6 +220,23 @@ class _HomeState extends State<Home> {
                               },
                               title: Text('${startTime.hour}:${startTime.minute}    ${event.title}'),
                               subtitle: Text(description),
+                              trailing: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  IconButton(
+                                    icon: Icon(Icons.edit),
+                                    onPressed: () {
+                                      _editEvent(event);
+                                    },
+                                  ),
+                                  IconButton(
+                                    icon: Icon(Icons.delete),
+                                    onPressed: () {
+                                      _deleteEvent(event);
+                                    },
+                                  ),
+                                ],
+                              ),
                             ),
                           );
                         },
@@ -225,6 +250,131 @@ class _HomeState extends State<Home> {
         );
       },
     );
+
+    if (edited!) {
+      setState(() {
+        _selectedEvents.value = _getEventsForDay(_selectedDay ?? DateTime.now());
+      });
+    }
+
+    _openDialogs.add(context);
+  }
+
+  void _editEvent(Event event) {
+    String eventTitle = event.title;
+    String eventDescription = event.description;
+    TimeOfDay selectedTime = event.time;
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setState) {
+            return AlertDialog(
+              scrollable: true,
+              title: Text("Editar Evento"),
+              content: Column(
+                children: [
+                  DropdownButton<String>(
+                    value: eventTitle,
+                    onChanged: (String? newValue) {
+                      setState(() {
+                        eventTitle = newValue!;
+                      });
+                    },
+                    items: categorys.map((String categoria) {
+                      return DropdownMenuItem<String>(
+                        value: categoria,
+                        child: Text(categoria),
+                      );
+                    }).toList(),
+                  ),
+                  TextField(
+                    controller: _eventController..text = eventDescription,
+                    decoration: InputDecoration(labelText: 'Evento'),
+                  ),
+                  Row(
+                    children: [
+                      Text('Hora: ${selectedTime.format(context)}'),
+                      IconButton(
+                        icon: Icon(Icons.access_time),
+                        onPressed: () async {
+                          final newTime = await showTimePicker(
+                            context: context,
+                            initialTime: selectedTime,
+                          );
+                          if (newTime != null) {
+                            setState(() {
+                              selectedTime = newTime;
+                            });
+                          }
+                        },
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              actions: [
+                ElevatedButton(
+                  onPressed: () {
+                    final editedEvent = Event(eventTitle, _eventController.text, selectedTime);
+                    final selectedDay = _selectedDay ?? DateTime.now();
+                    final eventsForDay = _getEventsForDay(selectedDay);
+                    final index = eventsForDay.indexWhere((e) => e == event);
+                    if (index != -1) {
+                      eventsForDay[index] = editedEvent;
+                      events[selectedDay] = eventsForDay;
+                      _selectedEvents.value = eventsForDay;
+                      Navigator.pop(context, true);
+                      Navigator.of(context).pop();
+                      _showDayEvents();
+                    }
+                  },
+                  child: Text("Guardar Cambios"),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _deleteEvent(Event event) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text("Confirmar eliminación"),
+          content: Text("¿Seguro que quieres eliminar este evento?"),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+              child: Text("Cancelar"),
+            ),
+            TextButton(
+              onPressed: () {
+                _performEventDeletion(event);
+                Navigator.pop(context, true);
+                Navigator.of(context).pop();
+                _showDayEvents();
+              },
+              child: Text("Eliminar"),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _performEventDeletion(Event event) {
+    final selectedDay = _selectedDay ?? DateTime.now();
+    final eventsForDay = _getEventsForDay(selectedDay);
+    eventsForDay.remove(event);
+    events[selectedDay] = eventsForDay;
+    _selectedEvents.value = eventsForDay;
   }
 
   void _onDaySelected(DateTime selectedDay, DateTime focusedDay) {
