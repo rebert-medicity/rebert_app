@@ -1,5 +1,9 @@
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:rebert_app/models/users.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'home.dart';
 import 'signup.dart';
@@ -19,15 +23,10 @@ class _LoginState extends State<Login> {
   final TextEditingController _controllerPassword = TextEditingController();
 
   bool _obscurePassword = true;
-  final Box _boxLogin = Hive.box("login");
-  final Box _boxAccounts = Hive.box("accounts");
+  String _errorText = '';
 
   @override
   Widget build(BuildContext context) {
-    if (_boxLogin.get("loginStatus") ?? false) {
-      return Home();
-    }
-
     return Scaffold(
         backgroundColor: Theme.of(context).colorScheme.primaryContainer,
         body: Form(
@@ -64,10 +63,7 @@ class _LoginState extends State<Login> {
                   validator: (String? value) {
                     if (value == null || value.isEmpty) {
                       return "Por favor, ingrese su usuario.";
-                    } else if (!_boxAccounts.containsKey(value)) {
-                      return "Usuario no registrado!";
                     }
-
                     return null;
                   },
                 ),
@@ -98,15 +94,19 @@ class _LoginState extends State<Login> {
                   ),
                   validator: (String? value) {
                     if (value == null || value.isEmpty) {
-                      return "Por favor, ingrese su contraseñ.";
-                    } else if (value !=
-                        _boxAccounts.get(_controllerUsername.text)) {
-                      return "Contraseña inválida.";
+                      return "Por favor, ingrese su contraseña";
                     }
-
                     return null;
                   },
                 ),
+                // Mostrar el mensaje de error si existe
+                if (_errorText.isNotEmpty)
+                  Text(
+                    _errorText,
+                    style: TextStyle(
+                      color: Colors.red,
+                    ),
+                  ),
                 const SizedBox(height: 60),
                 Column(
                   children: [
@@ -117,19 +117,28 @@ class _LoginState extends State<Login> {
                           borderRadius: BorderRadius.circular(20),
                         ),
                       ),
-                      onPressed: () {
+                      onPressed: () async {
                         if (_formKey.currentState?.validate() ?? false) {
-                          _boxLogin.put("loginStatus", true);
-                          _boxLogin.put("userName", _controllerUsername.text);
+                          User? userLogin = await loginUser(_controllerUsername.text, _controllerPassword.text);
+                          final userBox = await Hive.openBox<User>('userBox'); // Abre o crea una caja llamada "userBox" de tipo User
+                          // Guarda el usuario en la caja
 
-                          Navigator.pushReplacement(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) {
-                                return Home();
-                              },
-                            ),
-                          );
+                          if (userLogin!=null) {
+                            await userBox.put('user', userLogin!);
+                            Navigator.pushReplacement(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) {
+                                  return Home();
+                                },
+                              ),
+                            );
+                          } else {
+                            // Actualizar el mensaje de error
+                            setState(() {
+                              _errorText = 'Credenciales incorrectas';
+                            });
+                          }
                         }
                       },
                       child: const Text("Iniciar Sesión"),
@@ -141,7 +150,9 @@ class _LoginState extends State<Login> {
                         TextButton(
                           onPressed: () {
                             _formKey.currentState?.reset();
-
+                            setState(() {
+                              _errorText = '';
+                            });
                             Navigator.push(
                               context,
                               MaterialPageRoute(
@@ -169,5 +180,40 @@ class _LoginState extends State<Login> {
     _controllerUsername.dispose();
     _controllerPassword.dispose();
     super.dispose();
+  }
+}
+
+Future<User?> loginUser(String username, String password) async {
+  const apiUrl = 'https://medicity.edarkea.com/api/v1.0/auth';
+
+  final response = await http.post(
+    Uri.parse(apiUrl),
+    headers: <String, String>{
+      'Content-Type': 'application/json',
+    },
+    body: jsonEncode(<String, String>{
+      'email': username,
+      'username': username,
+      'password': password,
+    }),
+  );
+
+  if (response.statusCode == 200) {
+    final userJsonBody = json.decode(response.body);
+    final userToken =  response.headers['auth-token'];
+    final user = User(
+      userJsonBody['id'],          // id
+      userJsonBody['username'],    // username
+      userJsonBody['password'],    // password
+      userJsonBody['firstName'],   // firstName
+      userJsonBody['lastName'],    // lastName
+      userJsonBody['email'],       // email
+      userJsonBody['role'],        // role
+      userToken,       // token
+    );
+
+    return user;
+  }else{
+    return null;
   }
 }

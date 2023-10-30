@@ -1,8 +1,13 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:table_calendar/table_calendar.dart';
-import 'login.dart';
+import '../models/appointment.dart';
+import '../models/users.dart';
+import 'package:http/http.dart' as http;
 import 'package:hive_flutter/hive_flutter.dart';
-import '../utils.dart';
+import '../models/events.dart';
+import '../models/typeEvent.dart';
 
 
 class Home extends StatefulWidget {
@@ -11,8 +16,8 @@ class Home extends StatefulWidget {
 }
 
 class _HomeState extends State<Home> {
-  String? _categorySelected;
-  List<String> categorys = ["Cita", "Medicina", "Otros"];
+  late String _categorySelected;
+  List<String> categorys = [];
   CalendarFormat _calendarFormat = CalendarFormat.month;
   RangeSelectionMode _rangeSelectionMode = RangeSelectionMode.toggledOn;
   DateTime _focusedDay = DateTime.now();
@@ -21,13 +26,39 @@ class _HomeState extends State<Home> {
   Map<DateTime, List<Event>> events = {};
   TextEditingController _eventController = TextEditingController();
   late final ValueNotifier<List<Event>> _selectedEvents;
+  late final Box<User> userBox;
+
+  _HomeState() {
+    _categorySelected = '';
+    _selectedEvents = ValueNotifier([]);
+  }
 
   @override
   void initState() {
     super.initState();
+    userBox = Hive.box<User>('userBox');
     _selectedDay = _focusedDay;
-    _selectedEvents = ValueNotifier<List<Event>>(_getEventsForDay(DateTime.now()));
+    _updateCategories();
+
+    _fetchAppointments().then((appointments) {
+      setState(() {
+        events = generateEvents(appointments);
+      });
+    });
   }
+
+  Future<void> _updateCategories() async {
+    final categoryList = await _fetchData();
+    final categoryNames = categoryList
+        .where((category) => category.name != null)
+        .map((category) => category.name!)
+        .toList();
+
+    setState(() {
+      categorys = categoryNames;
+    });
+  }
+
 
   @override
   void dispose() {
@@ -128,7 +159,7 @@ class _HomeState extends State<Home> {
                         onPressed: () async {
                           selectedTime = await showTimePicker(
                             context: context,
-                            initialTime: TimeOfDay.now(),
+                            initialTime: TimeOfDay.now()
                           );
                           setState(() {});
                         },
@@ -402,5 +433,111 @@ class _HomeState extends State<Home> {
 
   List<Event> _getEventsForDay(DateTime day) {
     return events[day] ?? [];
+  }
+
+  Future<List<Type>> _fetchData() async {
+    final savedUser = userBox.get('user');
+    if (savedUser != null && savedUser.token != null) {
+      String role=savedUser.role ?? '';
+      final apiUrl = 'https://medicity.edarkea.com/api/app-type/find-by-role/'+role;
+
+      final response = await http.get(
+        Uri.parse(apiUrl),
+        headers: <String, String>{
+          'auth-token': '${savedUser.token}',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final List<dynamic> responseData = json.decode(response.body);
+        List<Type> types = responseData.map((typeData) {
+          return Type(
+            typeData['id'],
+            typeData['name'],
+            typeData['role'],
+            typeData['createAt'],
+            typeData['updateAt'],
+          );
+        }).toList();
+
+        return types;
+      } else {
+
+        print('Error en la solicitud: ${response.statusCode}');
+        return [];
+      }
+    }
+
+    return [];
+  }
+
+  Future<List<Appointment>> _fetchAppointments() async {
+    final savedUser = userBox.get('user');
+    if (savedUser != null && savedUser.token != null) {
+      final apiUrl = 'https://medicity.edarkea.com/api/appointment';
+
+      final response = await http.get(
+        Uri.parse(apiUrl),
+        headers: <String, String>{
+          'auth-token': '${savedUser.token}',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final List<dynamic> responseData = json.decode(response.body);
+        List<Appointment> appointments = responseData.map((appointmentData) {
+          return Appointment(
+            appointmentData['id'],
+            appointmentData['schedule'],
+            appointmentData['description'],
+            appointmentData['repetatEach'],
+            appointmentData['createAt'],
+            appointmentData['updateAt'],
+            Type(
+              appointmentData['appointmentType']['id'],
+              appointmentData['appointmentType']['name'],
+              appointmentData['appointmentType']['role'],
+              appointmentData['appointmentType']['createAt'],
+              appointmentData['appointmentType']['updateAt'],
+            ),
+          );
+        }).toList();
+
+        return appointments;
+      } else {
+        print('Error en la solicitud: ${response.statusCode}');
+        return [];
+      }
+    }
+
+    return [];
+  }
+
+  Map<DateTime, List<Event>> generateEvents(List<Appointment> appointments) {
+    Map<DateTime, List<Event>> eventsMap = {};
+
+    for (Appointment appointment in appointments) {
+      String schedule = appointment.schedule;
+
+      if (schedule != null && schedule != "NaN" && schedule.isNotEmpty) {
+        int timestamp = int.parse(schedule);
+        DateTime dateTime = DateTime.fromMillisecondsSinceEpoch(timestamp);
+        DateTime dateTimeAtMidnight = DateTime.utc(dateTime.year, dateTime.month, dateTime.day);
+        if (!eventsMap.containsKey(dateTimeAtMidnight)) {
+          eventsMap[dateTimeAtMidnight] = [];
+        }
+
+        String category = appointment.appointmentType.name ?? '';
+        Event event = Event(
+          category,
+          appointment.description,
+          TimeOfDay(hour: dateTime.hour, minute: dateTime.minute),
+        );
+
+        eventsMap[dateTimeAtMidnight]!.add(event);
+      }
+    }
+
+    return eventsMap;
   }
 }

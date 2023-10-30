@@ -1,6 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:rebert_app/ui/home.dart';
-
 import 'ui/login.dart';
 
 class MainApp extends StatelessWidget {
