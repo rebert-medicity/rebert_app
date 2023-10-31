@@ -27,6 +27,7 @@ class _HomeState extends State<Home> {
   TextEditingController _eventController = TextEditingController();
   late final ValueNotifier<List<Event>> _selectedEvents;
   late final Box<User> userBox;
+  late List<Type> categoryList;
 
   _HomeState() {
     _categorySelected = '';
@@ -48,7 +49,7 @@ class _HomeState extends State<Home> {
   }
 
   Future<void> _updateCategories() async {
-    final categoryList = await _fetchData();
+    categoryList = await _fetchData();
     final categoryNames = categoryList
         .where((category) => category.name != null)
         .map((category) => category.name!)
@@ -171,6 +172,20 @@ class _HomeState extends State<Home> {
               actions: [
                 ElevatedButton(
                   onPressed: () {
+                    DateTime? day = _selectedDay;
+                    Duration timeOfDayDuration = Duration(
+                      hours: selectedTime!.hour,
+                      minutes: selectedTime!.minute,
+                    );
+                    DateTime newDateTime = day!.add(timeOfDayDuration);
+                    int millisecondsSinceEpoch = newDateTime.millisecondsSinceEpoch;
+                    createAppointment(
+                      id: 0, // Reemplaza con el ID correcto si es necesario
+                      schedule: millisecondsSinceEpoch.toString(), // Reemplaza con el valor de fecha y hora correcto en milisegundos
+                      description: _eventController.text,
+                      repeatEvery: 0, // Ajusta según tus necesidades
+                      appointmentType: categoryList[categorys.indexOf(categorySelected!)].id!, // Ajusta según tu lógica de tipo de cita
+                    );
                     if (_selectedDay != null) {
                       List<Event> listaAux = _getEventsForDay(_selectedDay!);
                       listaAux.add(Event(
@@ -204,6 +219,11 @@ class _HomeState extends State<Home> {
 
   List<BuildContext> _openDialogs = [];
   Future<void> _showDayEvents() async {
+    _fetchAppointments().then((appointments) {
+      setState(() {
+        events = generateEvents(appointments);
+      });
+    });
     _eventController.clear();
 
     for (BuildContext dialogContext in _openDialogs) {
@@ -232,6 +252,7 @@ class _HomeState extends State<Home> {
                       return ListView.builder(
                         shrinkWrap: true,
                         physics: NeverScrollableScrollPhysics(),
+                        itemCount: eventsForDay.length,
                         itemCount: eventsForDay.length,
                         itemBuilder: (context, index) {
                           final event = value[index];
@@ -539,5 +560,45 @@ class _HomeState extends State<Home> {
     }
 
     return eventsMap;
+  }
+
+  Future<void> createAppointment({
+    required int id,
+    required String schedule,
+    required String description,
+    required int repeatEvery,
+    required int appointmentType
+  }) async {
+    final apiUrl = 'https://medicity.edarkea.com/api/appointment';
+    final savedUser = userBox.get('user');
+    if (savedUser != null && savedUser.token != null) {
+      final appointmentData = {
+        "id": id,
+        "schedule": schedule,
+        "description": description,
+        "repetatEach": repeatEvery,
+        "appointmentType": appointmentType,
+      };
+
+      final headers = {
+        'auth-token': '${savedUser.token}',
+        'Content-Type': 'application/json',
+      };
+
+      final response = await http.post(
+        Uri.parse(apiUrl),
+        headers: headers,
+        body: json.encode(appointmentData),
+      );
+
+      if (response.statusCode == 200) {
+        // La solicitud fue exitosa, puedes manejar la respuesta aquí si es necesario.
+        print("Solicitud exitosa: ${response.body}");
+      } else {
+        // Manejar errores de solicitud aquí.
+        print("Error en la solicitud: ${response.statusCode}");
+      }
+    }
+
   }
 }
