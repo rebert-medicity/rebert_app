@@ -9,8 +9,9 @@ import 'package:table_calendar/table_calendar.dart';
 class Event {
   final String title, description;
   final TimeOfDay time;
+  final int idAppointment;
 
-  const Event(this.title, this.description, this.time);
+  const Event(this.title, this.description, this.time, this.idAppointment);
 
   @override
   String toString() => title;

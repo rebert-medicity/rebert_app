@@ -8,6 +8,7 @@ import 'package:http/http.dart' as http;
 import 'package:hive_flutter/hive_flutter.dart';
 import '../models/events.dart';
 import '../models/typeEvent.dart';
+import 'login.dart';
 
 
 class Home extends StatefulWidget {
@@ -79,6 +80,26 @@ class _HomeState extends State<Home> {
   AppBar _buildAppBar() {
     return AppBar(
       title: Text('Agenda'),
+      actions: <Widget>[
+        IconButton(
+          icon: Icon(Icons.exit_to_app),
+          onPressed: () {
+            _logout();
+          },
+        ),
+      ],
+    );
+  }
+
+  void _logout() {
+    userBox.clear();
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (context) {
+          return Login();
+        },
+      ),
     );
   }
 
@@ -123,10 +144,11 @@ class _HomeState extends State<Home> {
   void _addEvent() {
     _eventController.clear();
     TimeOfDay? selectedTime;
+    String? categorySelected = categorys.first; // Establece un valor predeterminado para la categoría
+
     showDialog(
       context: context,
       builder: (context) {
-        String? categorySelected = categorys.first;
         return StatefulBuilder(
           builder: (BuildContext context, StateSetter setState) {
             return AlertDialog(
@@ -160,7 +182,7 @@ class _HomeState extends State<Home> {
                         onPressed: () async {
                           selectedTime = await showTimePicker(
                             context: context,
-                            initialTime: TimeOfDay.now()
+                            initialTime: TimeOfDay.now(),
                           );
                           setState(() {});
                         },
@@ -178,13 +200,17 @@ class _HomeState extends State<Home> {
                       minutes: selectedTime!.minute,
                     );
                     DateTime newDateTime = day!.add(timeOfDayDuration);
+
+                    newDateTime = newDateTime.toUtc();
+
                     int millisecondsSinceEpoch = newDateTime.millisecondsSinceEpoch;
+
                     createAppointment(
-                      id: 0, // Reemplaza con el ID correcto si es necesario
-                      schedule: millisecondsSinceEpoch.toString(), // Reemplaza con el valor de fecha y hora correcto en milisegundos
+                      id: 0,
+                      schedule: millisecondsSinceEpoch.toString(),
                       description: _eventController.text,
-                      repeatEvery: 0, // Ajusta según tus necesidades
-                      appointmentType: categoryList[categorys.indexOf(categorySelected!)].id!, // Ajusta según tu lógica de tipo de cita
+                      repeatEvery: 0,
+                      appointmentType: categoryList[categorys.indexOf(categorySelected!)].id!,
                     );
                     if (_selectedDay != null) {
                       List<Event> listaAux = _getEventsForDay(_selectedDay!);
@@ -192,6 +218,7 @@ class _HomeState extends State<Home> {
                         categorySelected!,
                         _eventController.text,
                         selectedTime!,
+                        0
                       ));
                       events[_selectedDay!] = listaAux;
                       _selectedEvents.value = listaAux;
@@ -201,6 +228,7 @@ class _HomeState extends State<Home> {
                           categorySelected!,
                           _eventController.text,
                           selectedTime!,
+                          0
                         )]
                       });
                       _selectedEvents.value = _getEventsForDay(_selectedDay!);
@@ -253,7 +281,6 @@ class _HomeState extends State<Home> {
                         shrinkWrap: true,
                         physics: NeverScrollableScrollPhysics(),
                         itemCount: eventsForDay.length,
-                        itemCount: eventsForDay.length,
                         itemBuilder: (context, index) {
                           final event = value[index];
                           final eventIndex = index + 1;
@@ -278,7 +305,7 @@ class _HomeState extends State<Home> {
                                   IconButton(
                                     icon: Icon(Icons.edit),
                                     onPressed: () {
-                                      _editEvent(event);
+                                      _editEvent(event,index);
                                     },
                                   ),
                                   IconButton(
@@ -312,10 +339,11 @@ class _HomeState extends State<Home> {
     _openDialogs.add(context);
   }
 
-  void _editEvent(Event event) {
+  void _editEvent(Event event, int index) {
     String eventTitle = event.title;
     String eventDescription = event.description;
     TimeOfDay selectedTime = event.time;
+    int idAppointment = event.idAppointment;
 
     showDialog(
       context: context,
@@ -368,11 +396,29 @@ class _HomeState extends State<Home> {
               ),
               actions: [
                 ElevatedButton(
-                  onPressed: () {
-                    final editedEvent = Event(eventTitle, _eventController.text, selectedTime);
+                  onPressed: () async {
+
+                    DateTime? day = _selectedDay;
+                    Duration timeOfDayDuration = Duration(
+                      hours: selectedTime!.hour,
+                      minutes: selectedTime!.minute,
+                    );
+                    DateTime newDateTime = day!.add(timeOfDayDuration);
+
+                    newDateTime = newDateTime.toUtc();
+
+                    int millisecondsSinceEpoch = newDateTime.millisecondsSinceEpoch;
+
+                    await updateAppointment(
+                        id: idAppointment,
+                        schedule: millisecondsSinceEpoch.toString(),
+                        description: _eventController.text,
+                        repeatEvery: 0,
+                        appointmentType: categoryList[categorys.indexOf(eventTitle!)].id!);
+
+                    final editedEvent = Event(eventTitle, _eventController.text, selectedTime, idAppointment);
                     final selectedDay = _selectedDay ?? DateTime.now();
                     final eventsForDay = _getEventsForDay(selectedDay);
-                    final index = eventsForDay.indexWhere((e) => e == event);
                     if (index != -1) {
                       eventsForDay[index] = editedEvent;
                       events[selectedDay] = eventsForDay;
@@ -407,8 +453,13 @@ class _HomeState extends State<Home> {
               child: Text("Cancelar"),
             ),
             TextButton(
-              onPressed: () {
-                _performEventDeletion(event);
+              onPressed: () async {
+                await deleteAppointment(id:event.idAppointment);
+                await _fetchAppointments().then((appointments) {
+                  setState(() {
+                    events = generateEvents(appointments);
+                  });
+                });
                 Navigator.pop(context, true);
                 Navigator.of(context).pop();
                 _showDayEvents();
@@ -543,6 +594,7 @@ class _HomeState extends State<Home> {
       if (schedule != null && schedule != "NaN" && schedule.isNotEmpty) {
         int timestamp = int.parse(schedule);
         DateTime dateTime = DateTime.fromMillisecondsSinceEpoch(timestamp);
+        dateTime=dateTime.toUtc();
         DateTime dateTimeAtMidnight = DateTime.utc(dateTime.year, dateTime.month, dateTime.day);
         if (!eventsMap.containsKey(dateTimeAtMidnight)) {
           eventsMap[dateTimeAtMidnight] = [];
@@ -553,6 +605,7 @@ class _HomeState extends State<Home> {
           category,
           appointment.description,
           TimeOfDay(hour: dateTime.hour, minute: dateTime.minute),
+          appointment.id
         );
 
         eventsMap[dateTimeAtMidnight]!.add(event);
@@ -584,21 +637,65 @@ class _HomeState extends State<Home> {
         'auth-token': '${savedUser.token}',
         'Content-Type': 'application/json',
       };
-
       final response = await http.post(
         Uri.parse(apiUrl),
         headers: headers,
         body: json.encode(appointmentData),
       );
-
-      if (response.statusCode == 200) {
-        // La solicitud fue exitosa, puedes manejar la respuesta aquí si es necesario.
-        print("Solicitud exitosa: ${response.body}");
-      } else {
-        // Manejar errores de solicitud aquí.
-        print("Error en la solicitud: ${response.statusCode}");
-      }
     }
 
   }
+
+  Future<void> updateAppointment({
+    required int id,
+    required String schedule,
+    required String description,
+    required int repeatEvery,
+    required int appointmentType
+  }) async {
+    final apiUrl = 'https://medicity.edarkea.com/api/appointment/update/'+id.toString();
+    final savedUser = userBox.get('user');
+    if (savedUser != null && savedUser.token != null) {
+      final appointmentData = {
+        "id": id,
+        "schedule": schedule,
+        "description": description,
+        "repetatEach": repeatEvery,
+        "appointmentType": appointmentType,
+      };
+
+      final headers = {
+        'auth-token': '${savedUser.token}',
+        'Content-Type': 'application/json',
+      };
+
+      final response = await http.put(
+        Uri.parse(apiUrl),
+        headers: headers,
+        body: json.encode(appointmentData),
+      );
+    }
+
+  }
+
+  Future<void> deleteAppointment({
+    required int id
+  }) async {
+    final apiUrl = 'https://medicity.edarkea.com/api/appointment/delete/'+id.toString();
+    final savedUser = userBox.get('user');
+    if (savedUser != null && savedUser.token != null) {
+
+      final headers = {
+        'auth-token': '${savedUser.token}',
+        'Content-Type': 'application/json',
+      };
+
+      final response = await http.delete(
+        Uri.parse(apiUrl),
+        headers: headers
+      );
+    }
+
+  }
+
 }
