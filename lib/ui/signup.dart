@@ -1,9 +1,11 @@
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
 final List<DropdownMenuEntry<String>> roles = <DropdownMenuEntry<String>>[
-  DropdownMenuEntry(value: '01', label: 'Médico'),
-  DropdownMenuEntry(value: '02', label: 'Paciente')
+  DropdownMenuEntry(value: 'DOC', label: 'Médico'),
+  DropdownMenuEntry(value: 'PAT', label: 'Paciente')
 ];
 
 class Signup extends StatefulWidget {
@@ -19,12 +21,13 @@ class _SignupState extends State<Signup> {
   final FocusNode _focusNodePassword = FocusNode();
   final FocusNode _focusNodeConfirmPassword = FocusNode();
   final TextEditingController _controllerUsername = TextEditingController();
+  final TextEditingController _controllerFname = TextEditingController();
+  final TextEditingController _controllerLname = TextEditingController();
   final TextEditingController _controllerEmail = TextEditingController();
   final TextEditingController _controllerPassword = TextEditingController();
   final TextEditingController _controllerConFirmPassword =
       TextEditingController();
 
-  final Box _boxAccounts = Hive.box("accounts");
   bool _obscurePassword = true;
   String? selectedRole;
 
@@ -65,10 +68,51 @@ class _SignupState extends State<Signup> {
                 validator: (String? value) {
                   if (value == null || value.isEmpty) {
                     return "Por favor ingresa tu usuario.";
-                  } else if (_boxAccounts.containsKey(value)) {
-                    return "Usuario ya registrado!";
                   }
-
+                  return null;
+                },
+                onEditingComplete: () => _focusNodeEmail.requestFocus(),
+              ),
+              const SizedBox(height: 35),
+              TextFormField(
+                controller: _controllerFname,
+                keyboardType: TextInputType.name,
+                decoration: InputDecoration(
+                  labelText: "Nombres",
+                  prefixIcon: const Icon(Icons.person_outline),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                validator: (String? value) {
+                  if (value == null || value.isEmpty) {
+                    return "Por favor ingresa tu usuario.";
+                  }
+                  return null;
+                },
+                onEditingComplete: () => _focusNodeEmail.requestFocus(),
+              ),
+              const SizedBox(height: 35),
+              TextFormField(
+                controller: _controllerLname,
+                keyboardType: TextInputType.name,
+                decoration: InputDecoration(
+                  labelText: "Apellidos",
+                  prefixIcon: const Icon(Icons.person_outline),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                validator: (String? value) {
+                  if (value == null || value.isEmpty) {
+                    return "Por favor ingresa tu usuario.";
+                  }
                   return null;
                 },
                 onEditingComplete: () => _focusNodeEmail.requestFocus(),
@@ -205,10 +249,14 @@ class _SignupState extends State<Signup> {
                     ),
                     onPressed: () {
                       if (_formKey.currentState?.validate() ?? false) {
-                        _boxAccounts.put(
-                          _controllerUsername.text,
-                          _controllerConFirmPassword.text,
-                        );
+
+                        createUser(id: 0,
+                            username: _controllerUsername.text,
+                            password: _controllerPassword.text,
+                            firstName: _controllerFname.text,
+                            lastName: _controllerLname.text,
+                            email: _controllerEmail.text,
+                            role: selectedRole);
 
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
@@ -246,6 +294,36 @@ class _SignupState extends State<Signup> {
           ),
         ),
       ),
+    );
+  }
+
+  Future<void> createUser({
+    required int id,
+    required String username,
+    required String password,
+    required String firstName,
+    required String lastName,
+    required String email,
+    String? role
+  }) async {
+    final apiUrl = 'https://medicity.edarkea.com/api/user/save';
+    final userData = {
+      "id": id,
+      "username": username,
+      "password": password,
+      "firstName": firstName,
+      "lastName": lastName,
+      "email": email,
+      "role": role,
+    };
+
+    final headers = {
+      'Content-Type': 'application/json',
+    };
+    final response = await http.post(
+      Uri.parse(apiUrl),
+      headers: headers,
+      body: json.encode(userData),
     );
   }
 
