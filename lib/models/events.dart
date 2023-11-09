@@ -10,7 +10,6 @@ class Event {
   final String title, description;
   final TimeOfDay time;
   final int idAppointment;
-
   const Event(this.title, this.description, this.time, this.idAppointment);
 
   @override

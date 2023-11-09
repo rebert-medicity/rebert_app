@@ -18,7 +18,9 @@ class Home extends StatefulWidget {
 
 class _HomeState extends State<Home> {
   late String _categorySelected;
+  late String _medicitySelected;
   List<String> categorys = [];
+  List<String> medicities = [];
   CalendarFormat _calendarFormat = CalendarFormat.month;
   RangeSelectionMode _rangeSelectionMode = RangeSelectionMode.toggledOn;
   DateTime _focusedDay = DateTime.now();
@@ -29,9 +31,11 @@ class _HomeState extends State<Home> {
   late final ValueNotifier<List<Event>> _selectedEvents;
   late final Box<User> userBox;
   late List<Type> categoryList;
+  late List<Medicity> medicityList;
 
   _HomeState() {
     _categorySelected = '';
+    _medicitySelected = '';
     _selectedEvents = ValueNotifier([]);
   }
 
@@ -41,7 +45,7 @@ class _HomeState extends State<Home> {
     userBox = Hive.box<User>('userBox');
     _selectedDay = _focusedDay;
     _updateCategories();
-
+    _updateMedicity();
     _fetchAppointments().then((appointments) {
       setState(() {
         events = generateEvents(appointments);
@@ -58,6 +62,17 @@ class _HomeState extends State<Home> {
 
     setState(() {
       categorys = categoryNames;
+    });
+  }
+  Future<void> _updateMedicity() async {
+    medicityList = await _fetchMedicity();
+    final names = medicityList
+        .where((item) => item.name != null)
+        .map((item) => item.name!)
+        .toList();
+
+    setState(() {
+      medicities = names;
     });
   }
 
@@ -108,6 +123,11 @@ class _HomeState extends State<Home> {
       mainAxisAlignment: MainAxisAlignment.end,
       children: [
         FloatingActionButton(
+          onPressed: _addSeizer,
+          child: Icon(Icons.person),
+        ),
+        SizedBox(width: 16),
+        FloatingActionButton(
           onPressed: _addEvent,
           child: Icon(Icons.add),
         ),
@@ -145,7 +165,7 @@ class _HomeState extends State<Home> {
     _eventController.clear();
     TimeOfDay? selectedTime;
     String? categorySelected = categorys.first; // Establece un valor predeterminado para la categoría
-
+    String? medicitySelected = medicities.first; 
     showDialog(
       context: context,
       builder: (context) {
@@ -156,6 +176,20 @@ class _HomeState extends State<Home> {
               title: Text("Añadir un evento"),
               content: Column(
                 children: [
+                  DropdownButton<String>(
+                    value: medicitySelected,
+                    onChanged: (String? newValue) {
+                      setState(() {
+                        medicitySelected = newValue;
+                      });
+                    },
+                    items: medicities.map((String name) {
+                      return DropdownMenuItem<String>(
+                        value: name,
+                        child: Text(name),
+                      );
+                    }).toList(),
+                  ),
                   DropdownButton<String>(
                     value: categorySelected,
                     onChanged: (String? newValue) {
@@ -201,8 +235,6 @@ class _HomeState extends State<Home> {
                     );
                     DateTime newDateTime = day!.add(timeOfDayDuration);
 
-                    newDateTime = newDateTime.toUtc();
-
                     int millisecondsSinceEpoch = newDateTime.millisecondsSinceEpoch;
 
                     createAppointment(
@@ -211,6 +243,7 @@ class _HomeState extends State<Home> {
                       description: _eventController.text,
                       repeatEvery: 0,
                       appointmentType: categoryList[categorys.indexOf(categorySelected!)].id!,
+                      medicity: medicityList[medicities.indexOf(medicitySelected!)].id!,
                     );
                     if (_selectedDay != null) {
                       List<Event> listaAux = _getEventsForDay(_selectedDay!);
@@ -226,6 +259,94 @@ class _HomeState extends State<Home> {
                       events.addAll({
                         _selectedDay!: [Event(
                           categorySelected!,
+                          _eventController.text,
+                          selectedTime!,
+                          0
+                        )]
+                      });
+                      _selectedEvents.value = _getEventsForDay(_selectedDay!);
+                    }
+                    Navigator.of(context).pop();
+                  },
+                  child: Text("Agregar"),
+                )
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+  void _addSeizer() {
+    _eventController.clear();
+    TimeOfDay? selectedTime;
+    String? medicitySelected = medicities.first; 
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setState) {
+            return AlertDialog(
+              scrollable: true,
+              title: Text("Convulsiones"),
+              content: Column(
+                children: [
+                  TextField(
+                    controller: _eventController,
+                    decoration: InputDecoration(labelText: 'Descripcion'),
+                  ),
+                  Row(
+                    children: [
+                      Text('Hora: ${selectedTime?.format(context) ?? ''}'),
+                      IconButton(
+                        icon: Icon(Icons.access_time),
+                        onPressed: () async {
+                          selectedTime = await showTimePicker(
+                            context: context,
+                            initialTime: TimeOfDay.now(),
+                          );
+                          setState(() {});
+                        },
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              actions: [
+                ElevatedButton(
+                  onPressed: () {
+                    DateTime? day = _selectedDay;
+                    Duration timeOfDayDuration = Duration(
+                      hours: selectedTime!.hour,
+                      minutes: selectedTime!.minute,
+                    );
+                    DateTime newDateTime = day!.add(timeOfDayDuration);
+
+                    //newDateTime = newDateTime.toUtc();
+
+                    int millisecondsSinceEpoch = newDateTime.millisecondsSinceEpoch;
+
+                    createAppointment(
+                      id: 0,
+                      schedule: millisecondsSinceEpoch.toString(),
+                      description: _eventController.text,
+                      repeatEvery: 0,
+                      appointmentType: 7,
+                    );
+                    if (_selectedDay != null) {
+                      List<Event> listaAux = _getEventsForDay(_selectedDay!);
+                      listaAux.add(Event(
+                        medicitySelected!,
+                        _eventController.text,
+                        selectedTime!,
+                        0
+                      ));
+                      events[_selectedDay!] = listaAux;
+                      _selectedEvents.value = listaAux;
+                    } else {
+                      events.addAll({
+                        _selectedDay!: [Event(
+                          medicitySelected!,
                           _eventController.text,
                           selectedTime!,
                           0
@@ -344,7 +465,7 @@ class _HomeState extends State<Home> {
     String eventDescription = event.description;
     TimeOfDay selectedTime = event.time;
     int idAppointment = event.idAppointment;
-
+    
     showDialog(
       context: context,
       builder: (context) {
@@ -543,6 +664,38 @@ class _HomeState extends State<Home> {
     return [];
   }
 
+  Future<List<Medicity>> _fetchMedicity() async {
+    final savedUser = userBox.get('user');
+    if (savedUser != null && savedUser.token != null) {
+
+      final apiUrl = 'https://medicity.edarkea.com/api/medicity/all';
+
+      final response = await http.get(
+        Uri.parse(apiUrl),
+        headers: <String, String>{
+          'auth-token': '${savedUser.token}',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final List<dynamic> responseData = json.decode(response.body);
+        List<Medicity> types = responseData.map((typeData) {
+          return Medicity(
+            typeData['id'],
+            typeData['name'],
+          );
+        }).toList();
+
+        return types;
+      } else {
+        print('Error en la solicitud: ${response.statusCode}');
+        return [];
+      }
+    }
+
+    return [];
+  }
+
   Future<List<Appointment>> _fetchAppointments() async {
     final savedUser = userBox.get('user');
     if (savedUser != null && savedUser.token != null) {
@@ -620,7 +773,8 @@ class _HomeState extends State<Home> {
     required String schedule,
     required String description,
     required int repeatEvery,
-    required int appointmentType
+    required int appointmentType,
+    int? medicity
   }) async {
     final apiUrl = 'https://medicity.edarkea.com/api/appointment';
     final savedUser = userBox.get('user');
@@ -631,6 +785,7 @@ class _HomeState extends State<Home> {
         "description": description,
         "repetatEach": repeatEvery,
         "appointmentType": appointmentType,
+        "medicity": medicity,
       };
 
       final headers = {

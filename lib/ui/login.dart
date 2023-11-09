@@ -199,6 +199,7 @@ Future<User?> loginUser(String username, String password) async {
       'password': password,
     }),
   );
+    print(response);
 
   if (response.statusCode == 200) {
     final userJsonBody = json.decode(response.body);
@@ -213,7 +214,6 @@ Future<User?> loginUser(String username, String password) async {
       userJsonBody['role'],        // role
       userToken,       // token
     );
-
     return user;
   }else{
     return null;
