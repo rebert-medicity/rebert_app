@@ -119,20 +119,34 @@ class _LoginState extends State<Login> {
                       ),
                       onPressed: () async {
                         if (_formKey.currentState?.validate() ?? false) {
-                          User? userLogin = await loginUser(_controllerUsername.text, _controllerPassword.text);
-                          final userBox = await Hive.openBox<User>('userBox'); // Abre o crea una caja llamada "userBox" de tipo User
+                          User? userLogin = await loginUser(
+                              _controllerUsername.text,
+                              _controllerPassword.text);
                           // Guarda el usuario en la caja
-
-                          if (userLogin!=null) {
-                            await userBox.put('user', userLogin!);
-                            Navigator.pushReplacement(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) {
-                                  return Home();
-                                },
-                              ),
-                            );
+                          if (userLogin != null) {
+                            if (await Hive.boxExists('userBox')) {
+                              final userBox = await Hive.openBox<User>('userBox');
+                              await userBox.put('user', userLogin!);
+                              Navigator.pushReplacement(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) {
+                                    return Home();
+                                  },
+                                ),
+                              );
+                            }else{
+                              final userBox = await Hive.openBox<User>('userBox');
+                              await userBox.put('user', userLogin!);
+                              Navigator.pushReplacement(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) {
+                                    return Home();
+                                  },
+                                ),
+                              );
+                            }
                           } else {
                             // Actualizar el mensaje de error
                             setState(() {
@@ -174,8 +188,6 @@ class _LoginState extends State<Login> {
         ));
   }
 
-
-
   @override
   void dispose() {
     _focusNodePassword.dispose();
@@ -199,23 +211,21 @@ Future<User?> loginUser(String username, String password) async {
       'password': password,
     }),
   );
-    print(response);
-
   if (response.statusCode == 200) {
     final userJsonBody = json.decode(response.body);
-    final userToken =  response.headers['auth-token'];
+    final userToken = response.headers['auth-token'];
     final user = User(
-      userJsonBody['id'],          // id
-      userJsonBody['username'],    // username
-      userJsonBody['password'],    // password
-      userJsonBody['firstName'],   // firstName
-      userJsonBody['lastName'],    // lastName
-      userJsonBody['email'],       // email
-      userJsonBody['role'],        // role
-      userToken,       // token
+      userJsonBody['id'], // id
+      userJsonBody['username'], // username
+      userJsonBody['password'], // password
+      userJsonBody['firstName'], // firstName
+      userJsonBody['lastName'], // lastName
+      userJsonBody['email'], // email
+      userJsonBody['role'], // role
+      userToken, // token
     );
     return user;
-  }else{
+  } else {
     return null;
   }
 }
