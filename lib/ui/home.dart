@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:rebert_app/models/users.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:table_calendar/table_calendar.dart';
 import '../models/appointment.dart';
@@ -7,9 +8,6 @@ import 'package:http/http.dart' as http;
 import '../models/events.dart';
 import '../models/typeEvent.dart';
 import 'login.dart';
-import 'package:timezone/browser.dart' as tz;
-
-var ecuador = tz.getLocation('America/Guayaquil');
 
 class Home extends StatefulWidget {
   const Home({super.key});
@@ -20,8 +18,11 @@ class Home extends StatefulWidget {
 class _HomeState extends State<Home> {
   late String _categorySelected;
   late String _medicitySelected;
+  late String _userSelected;
+
   List<String> categorys = [];
   List<String> medicities = [];
+  List<String> users = [];
   CalendarFormat _calendarFormat = CalendarFormat.month;
   RangeSelectionMode _rangeSelectionMode = RangeSelectionMode.toggledOn;
   DateTime _focusedDay = DateTime.now();
@@ -39,10 +40,12 @@ class _HomeState extends State<Home> {
 
   late List<Type> categoryList;
   late List<Medicity> medicityList;
+  late List<User> userList;
 
   _HomeState() {
     _categorySelected = '';
     _medicitySelected = '';
+    _userSelected = '';
     _selectedEvents = ValueNotifier([]);
   }
 
@@ -59,11 +62,11 @@ class _HomeState extends State<Home> {
   @override
   void initState() {
     super.initState();
-    tz.initializeTimeZone();
     _startAuth().then((value) {
       setState(() {
         _updateCategories();
         _updateMedicity();
+        _updateUsers();
         _fetchAppointments().then((appointments) {
           setState(() {
             events = generateEvents(appointments);
@@ -99,6 +102,18 @@ class _HomeState extends State<Home> {
     });
   }
 
+  Future<void> _updateUsers() async {
+    userList = await _fetchUsers();
+    final names = userList
+        .where((item) => item.firstName != null)
+        .map((item) => item.firstName! + " " + item.lastName!)
+        .toList();
+
+    setState(() {
+      users = names;
+    });
+  }
+
   @override
   void dispose() {
     _selectedEvents.dispose();
@@ -116,7 +131,7 @@ class _HomeState extends State<Home> {
 
   AppBar _buildAppBar() {
     return AppBar(
-      title: Text('Agenda'),
+      title: Text(fullname + ' (' + role + ')'),
       actions: <Widget>[
         IconButton(
           icon: Icon(Icons.exit_to_app),
@@ -189,6 +204,8 @@ class _HomeState extends State<Home> {
     String? categorySelected =
         categorys.first; // Establece un valor predeterminado para la categoría
     String? medicitySelected = medicities.first;
+    String? userSelected = users.first;
+
     showDialog(
       context: context,
       builder: (context) {
@@ -227,6 +244,20 @@ class _HomeState extends State<Home> {
                       );
                     }).toList(),
                   ),
+                  DropdownButton<String>(
+                    value: userSelected,
+                    onChanged: (String? newValue) {
+                      setState(() {
+                        userSelected = newValue;
+                      });
+                    },
+                    items: users.map((String name) {
+                      return DropdownMenuItem<String>(
+                        value: name,
+                        child: Text(name),
+                      );
+                    }).toList(),
+                  ),
                   TextField(
                     controller: _eventController,
                     decoration: InputDecoration(labelText: 'Evento'),
@@ -262,12 +293,9 @@ class _HomeState extends State<Home> {
                     int millisecondsSinceEpoch =
                         newDateTime.millisecondsSinceEpoch;
 
-                    var date = tz.TZDateTime.fromMillisecondsSinceEpoch(
-                        ecuador, millisecondsSinceEpoch);
-
                     createAppointment(
                       id: 0,
-                      schedule: date.millisecondsSinceEpoch.toString(),
+                      schedule: millisecondsSinceEpoch.toString(),
                       description: _eventController.text,
                       repeatEvery: 0,
                       appointmentType:
@@ -275,6 +303,9 @@ class _HomeState extends State<Home> {
                               .id!,
                       medicity:
                           medicityList[medicities.indexOf(medicitySelected!)]
+                              .id!,
+                      withuser:
+                          userList[users.indexOf(userSelected!)]
                               .id!,
                     );
                     if (_selectedDay != null) {
@@ -352,12 +383,9 @@ class _HomeState extends State<Home> {
                     int millisecondsSinceEpoch =
                         newDateTime.millisecondsSinceEpoch;
 
-                    var date = tz.TZDateTime.fromMillisecondsSinceEpoch(
-                        ecuador, millisecondsSinceEpoch);
-
                     createAppointment(
                       id: 0,
-                      schedule: date.millisecondsSinceEpoch.toString(),
+                      schedule: millisecondsSinceEpoch.toString(),
                       description: _eventController.text,
                       repeatEvery: 0,
                       appointmentType: 7,
@@ -431,7 +459,6 @@ class _HomeState extends State<Home> {
                           final eventIndex = index + 1;
                           final startTime = event.time;
                           final description = event.description;
-
                           return Container(
                             margin: EdgeInsets.symmetric(
                                 horizontal: 12, vertical: 4),
@@ -689,6 +716,38 @@ class _HomeState extends State<Home> {
     return [];
   }
 
+  Future<List<User>> _fetchUsers() async {
+    final apiUrl = 'https://medicity.edarkea.com/api/appointment/user/' + role;
+
+    final response = await http.get(
+      Uri.parse(apiUrl),
+      headers: <String, String>{
+        'auth-token': token,
+      },
+    );
+
+    if (response.statusCode == 200) {
+      final List<dynamic> responseData = json.decode(response.body);
+      List<User> types = responseData.map((typeData) {
+        return User(
+            typeData['id'],
+            typeData['username'],
+            null,
+            typeData['firstName'],
+            typeData['lastName'],
+            typeData['email'],
+            typeData['role'],
+            null);
+      }).toList();
+
+      return types;
+    } else {
+      print('Error en la solicitud: ${response.statusCode}');
+    }
+
+    return [];
+  }
+
   Future<List<Medicity>> _fetchMedicity() async {
     final apiUrl = 'https://medicity.edarkea.com/api/medicity/all';
 
@@ -742,7 +801,7 @@ class _HomeState extends State<Home> {
             appointmentData['appointmentType']['role'],
             appointmentData['appointmentType']['createAt'],
             appointmentData['appointmentType']['updateAt'],
-          ),
+          )
         );
       }).toList();
 
@@ -788,8 +847,9 @@ class _HomeState extends State<Home> {
       required String schedule,
       required String description,
       required int repeatEvery,
-      required int appointmentType,
-      int? medicity}) async {
+      required int appointmentType,req,
+      int? medicity,
+      int? withuser}) async {
     final apiUrl = 'https://medicity.edarkea.com/api/appointment';
 
     final appointmentData = {
@@ -799,6 +859,7 @@ class _HomeState extends State<Home> {
       "repetatEach": repeatEvery,
       "appointmentType": appointmentType,
       "medicity": medicity,
+      "withuser": withuser,
     };
 
     final headers = {
