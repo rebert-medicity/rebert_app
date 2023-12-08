@@ -7,7 +7,7 @@ import 'models/users.dart';
 
 void main() async {
   await _initHive();
-  await initializeDateFormatting('es', null);
+  await initializeDateFormatting('ec', null);
   initializeDateFormatting().then((_) => runApp(MainApp()));
 }
 

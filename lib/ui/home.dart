@@ -1,17 +1,18 @@
 import 'dart:convert';
-
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:table_calendar/table_calendar.dart';
 import '../models/appointment.dart';
-import '../models/users.dart';
 import 'package:http/http.dart' as http;
-import 'package:hive_flutter/hive_flutter.dart';
 import '../models/events.dart';
 import '../models/typeEvent.dart';
 import 'login.dart';
+import 'package:timezone/browser.dart' as tz;
 
+var ecuador = tz.getLocation('America/Guayaquil');
 
 class Home extends StatefulWidget {
+  const Home({super.key});
   @override
   _HomeState createState() => _HomeState();
 }
@@ -29,7 +30,13 @@ class _HomeState extends State<Home> {
   Map<DateTime, List<Event>> events = {};
   TextEditingController _eventController = TextEditingController();
   late final ValueNotifier<List<Event>> _selectedEvents;
-  late final Box<User> userBox;
+
+  late final String username;
+  late final String token;
+  late final int userid;
+  late final String fullname;
+  late final String role;
+
   late List<Type> categoryList;
   late List<Medicity> medicityList;
 
@@ -39,18 +46,33 @@ class _HomeState extends State<Home> {
     _selectedEvents = ValueNotifier([]);
   }
 
+  Future<void> _startAuth() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    //Guardar en la memoria cache
+    userid = prefs.getInt('id') ?? 0;
+    username = prefs.getString('username') ?? '';
+    fullname = prefs.getString('fullname') ?? '';
+    token = prefs.getString('token') ?? '';
+    role = prefs.getString('role') ?? '';
+  }
+
   @override
   void initState() {
     super.initState();
-    userBox = Hive.box<User>('userBox');
-    _selectedDay = _focusedDay;
-    _updateCategories();
-    _updateMedicity();
-    _fetchAppointments().then((appointments) {
+    tz.initializeTimeZone();
+    _startAuth().then((value) {
       setState(() {
-        events = generateEvents(appointments);
+        _updateCategories();
+        _updateMedicity();
+        _fetchAppointments().then((appointments) {
+          setState(() {
+            events = generateEvents(appointments);
+          });
+        });
       });
     });
+
+    _selectedDay = _focusedDay;
   }
 
   Future<void> _updateCategories() async {
@@ -64,6 +86,7 @@ class _HomeState extends State<Home> {
       categorys = categoryNames;
     });
   }
+
   Future<void> _updateMedicity() async {
     medicityList = await _fetchMedicity();
     final names = medicityList
@@ -75,7 +98,6 @@ class _HomeState extends State<Home> {
       medicities = names;
     });
   }
-
 
   @override
   void dispose() {
@@ -107,7 +129,6 @@ class _HomeState extends State<Home> {
   }
 
   void _logout() {
-    userBox.clear();
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
@@ -144,8 +165,9 @@ class _HomeState extends State<Home> {
     return Column(
       children: [
         TableCalendar(
-          locale: 'es_ES',
-          headerStyle: HeaderStyle(titleCentered: true, formatButtonVisible: false),
+          locale: 'es_EC',
+          headerStyle:
+              HeaderStyle(titleCentered: true, formatButtonVisible: false),
           firstDay: kFirstDay,
           lastDay: kLastDay,
           focusedDay: _focusedDay,
@@ -164,8 +186,9 @@ class _HomeState extends State<Home> {
   void _addEvent() {
     _eventController.clear();
     TimeOfDay? selectedTime;
-    String? categorySelected = categorys.first; // Establece un valor predeterminado para la categoría
-    String? medicitySelected = medicities.first; 
+    String? categorySelected =
+        categorys.first; // Establece un valor predeterminado para la categoría
+    String? medicitySelected = medicities.first;
     showDialog(
       context: context,
       builder: (context) {
@@ -230,39 +253,42 @@ class _HomeState extends State<Home> {
                   onPressed: () {
                     DateTime? day = _selectedDay;
                     Duration timeOfDayDuration = Duration(
-                      hours: selectedTime!.hour,
+                      hours: selectedTime!.hour + 5,
                       minutes: selectedTime!.minute,
                     );
+
                     DateTime newDateTime = day!.add(timeOfDayDuration);
 
-                    int millisecondsSinceEpoch = newDateTime.millisecondsSinceEpoch;
+                    int millisecondsSinceEpoch =
+                        newDateTime.millisecondsSinceEpoch;
+
+                    var date = tz.TZDateTime.fromMillisecondsSinceEpoch(
+                        ecuador, millisecondsSinceEpoch);
 
                     createAppointment(
                       id: 0,
-                      schedule: millisecondsSinceEpoch.toString(),
+                      schedule: date.millisecondsSinceEpoch.toString(),
                       description: _eventController.text,
                       repeatEvery: 0,
-                      appointmentType: categoryList[categorys.indexOf(categorySelected!)].id!,
-                      medicity: medicityList[medicities.indexOf(medicitySelected!)].id!,
+                      appointmentType:
+                          categoryList[categorys.indexOf(categorySelected!)]
+                              .id!,
+                      medicity:
+                          medicityList[medicities.indexOf(medicitySelected!)]
+                              .id!,
                     );
                     if (_selectedDay != null) {
                       List<Event> listaAux = _getEventsForDay(_selectedDay!);
-                      listaAux.add(Event(
-                        categorySelected!,
-                        _eventController.text,
-                        selectedTime!,
-                        0
-                      ));
+                      listaAux.add(Event(categorySelected!,
+                          _eventController.text, selectedTime!, 0));
                       events[_selectedDay!] = listaAux;
                       _selectedEvents.value = listaAux;
                     } else {
                       events.addAll({
-                        _selectedDay!: [Event(
-                          categorySelected!,
-                          _eventController.text,
-                          selectedTime!,
-                          0
-                        )]
+                        _selectedDay!: [
+                          Event(categorySelected!, _eventController.text,
+                              selectedTime!, 0)
+                        ]
                       });
                       _selectedEvents.value = _getEventsForDay(_selectedDay!);
                     }
@@ -277,10 +303,11 @@ class _HomeState extends State<Home> {
       },
     );
   }
+
   void _addSeizer() {
     _eventController.clear();
     TimeOfDay? selectedTime;
-    String? medicitySelected = medicities.first; 
+    String? medicitySelected = medicities.first;
     showDialog(
       context: context,
       builder: (context) {
@@ -317,40 +344,36 @@ class _HomeState extends State<Home> {
                   onPressed: () {
                     DateTime? day = _selectedDay;
                     Duration timeOfDayDuration = Duration(
-                      hours: selectedTime!.hour,
+                      hours: selectedTime!.hour + 5,
                       minutes: selectedTime!.minute,
                     );
                     DateTime newDateTime = day!.add(timeOfDayDuration);
 
-                    //newDateTime = newDateTime.toUtc();
+                    int millisecondsSinceEpoch =
+                        newDateTime.millisecondsSinceEpoch;
 
-                    int millisecondsSinceEpoch = newDateTime.millisecondsSinceEpoch;
+                    var date = tz.TZDateTime.fromMillisecondsSinceEpoch(
+                        ecuador, millisecondsSinceEpoch);
 
                     createAppointment(
                       id: 0,
-                      schedule: millisecondsSinceEpoch.toString(),
+                      schedule: date.millisecondsSinceEpoch.toString(),
                       description: _eventController.text,
                       repeatEvery: 0,
                       appointmentType: 7,
                     );
                     if (_selectedDay != null) {
                       List<Event> listaAux = _getEventsForDay(_selectedDay!);
-                      listaAux.add(Event(
-                        medicitySelected!,
-                        _eventController.text,
-                        selectedTime!,
-                        0
-                      ));
+                      listaAux.add(Event(medicitySelected!,
+                          _eventController.text, selectedTime!, 0));
                       events[_selectedDay!] = listaAux;
                       _selectedEvents.value = listaAux;
                     } else {
                       events.addAll({
-                        _selectedDay!: [Event(
-                          medicitySelected!,
-                          _eventController.text,
-                          selectedTime!,
-                          0
-                        )]
+                        _selectedDay!: [
+                          Event(medicitySelected!, _eventController.text,
+                              selectedTime!, 0)
+                        ]
                       });
                       _selectedEvents.value = _getEventsForDay(_selectedDay!);
                     }
@@ -397,7 +420,8 @@ class _HomeState extends State<Home> {
                   child: ValueListenableBuilder<List<Event>>(
                     valueListenable: _selectedEvents,
                     builder: (context, value, _) {
-                      final eventsForDay = _getEventsForDay(_selectedDay ?? DateTime.now());
+                      final eventsForDay =
+                          _getEventsForDay(_selectedDay ?? DateTime.now());
                       return ListView.builder(
                         shrinkWrap: true,
                         physics: NeverScrollableScrollPhysics(),
@@ -409,16 +433,19 @@ class _HomeState extends State<Home> {
                           final description = event.description;
 
                           return Container(
-                            margin: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                            margin: EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 4),
                             decoration: BoxDecoration(
                               border: Border.all(),
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: ListTile(
                               onTap: () {
-                                print("Tapped item $eventIndex: ${event.title}");
+                                print(
+                                    "Tapped item $eventIndex: ${event.title}");
                               },
-                              title: Text('${startTime.hour}:${startTime.minute}    ${event.title}'),
+                              title: Text(
+                                  '${startTime.hour}:${startTime.minute}    ${event.title}'),
                               subtitle: Text(description),
                               trailing: Row(
                                 mainAxisSize: MainAxisSize.min,
@@ -426,7 +453,7 @@ class _HomeState extends State<Home> {
                                   IconButton(
                                     icon: Icon(Icons.edit),
                                     onPressed: () {
-                                      _editEvent(event,index);
+                                      _editEvent(event, index);
                                     },
                                   ),
                                   IconButton(
@@ -453,7 +480,8 @@ class _HomeState extends State<Home> {
 
     if (edited!) {
       setState(() {
-        _selectedEvents.value = _getEventsForDay(_selectedDay ?? DateTime.now());
+        _selectedEvents.value =
+            _getEventsForDay(_selectedDay ?? DateTime.now());
       });
     }
 
@@ -465,7 +493,7 @@ class _HomeState extends State<Home> {
     String eventDescription = event.description;
     TimeOfDay selectedTime = event.time;
     int idAppointment = event.idAppointment;
-    
+
     showDialog(
       context: context,
       builder: (context) {
@@ -518,7 +546,6 @@ class _HomeState extends State<Home> {
               actions: [
                 ElevatedButton(
                   onPressed: () async {
-
                     DateTime? day = _selectedDay;
                     Duration timeOfDayDuration = Duration(
                       hours: selectedTime!.hour,
@@ -528,16 +555,19 @@ class _HomeState extends State<Home> {
 
                     newDateTime = newDateTime.toUtc();
 
-                    int millisecondsSinceEpoch = newDateTime.millisecondsSinceEpoch;
+                    int millisecondsSinceEpoch =
+                        newDateTime.millisecondsSinceEpoch;
 
                     await updateAppointment(
                         id: idAppointment,
                         schedule: millisecondsSinceEpoch.toString(),
                         description: _eventController.text,
                         repeatEvery: 0,
-                        appointmentType: categoryList[categorys.indexOf(eventTitle!)].id!);
+                        appointmentType:
+                            categoryList[categorys.indexOf(eventTitle!)].id!);
 
-                    final editedEvent = Event(eventTitle, _eventController.text, selectedTime, idAppointment);
+                    final editedEvent = Event(eventTitle, _eventController.text,
+                        selectedTime, idAppointment);
                     final selectedDay = _selectedDay ?? DateTime.now();
                     final eventsForDay = _getEventsForDay(selectedDay);
                     if (index != -1) {
@@ -575,7 +605,7 @@ class _HomeState extends State<Home> {
             ),
             TextButton(
               onPressed: () async {
-                await deleteAppointment(id:event.idAppointment);
+                await deleteAppointment(id: event.idAppointment);
                 await _fetchAppointments().then((appointments) {
                   setState(() {
                     events = generateEvents(appointments);
@@ -629,112 +659,97 @@ class _HomeState extends State<Home> {
   }
 
   Future<List<Type>> _fetchData() async {
-    final savedUser = userBox.get('user');
-    if (savedUser != null && savedUser.token != null) {
-      String role=savedUser.role ?? '';
-      final apiUrl = 'https://medicity.edarkea.com/api/app-type/find-by-role/'+role;
+    final apiUrl =
+        'https://medicity.edarkea.com/api/app-type/find-by-role/' + role;
 
-      final response = await http.get(
-        Uri.parse(apiUrl),
-        headers: <String, String>{
-          'auth-token': '${savedUser.token}',
-        },
-      );
+    final response = await http.get(
+      Uri.parse(apiUrl),
+      headers: <String, String>{
+        'auth-token': token,
+      },
+    );
 
-      if (response.statusCode == 200) {
-        final List<dynamic> responseData = json.decode(response.body);
-        List<Type> types = responseData.map((typeData) {
-          return Type(
-            typeData['id'],
-            typeData['name'],
-            typeData['role'],
-            typeData['createAt'],
-            typeData['updateAt'],
-          );
-        }).toList();
+    if (response.statusCode == 200) {
+      final List<dynamic> responseData = json.decode(response.body);
+      List<Type> types = responseData.map((typeData) {
+        return Type(
+          typeData['id'],
+          typeData['name'],
+          typeData['role'],
+          typeData['createAt'],
+          typeData['updateAt'],
+        );
+      }).toList();
 
-        return types;
-      } else {
-
-        print('Error en la solicitud: ${response.statusCode}');
-        return [];
-      }
+      return types;
+    } else {
+      print('Error en la solicitud: ${response.statusCode}');
     }
 
     return [];
   }
 
   Future<List<Medicity>> _fetchMedicity() async {
-    final savedUser = userBox.get('user');
-    if (savedUser != null && savedUser.token != null) {
+    final apiUrl = 'https://medicity.edarkea.com/api/medicity/all';
 
-      final apiUrl = 'https://medicity.edarkea.com/api/medicity/all';
+    final response = await http.get(
+      Uri.parse(apiUrl),
+      headers: <String, String>{
+        'auth-token': token,
+      },
+    );
 
-      final response = await http.get(
-        Uri.parse(apiUrl),
-        headers: <String, String>{
-          'auth-token': '${savedUser.token}',
-        },
-      );
+    if (response.statusCode == 200) {
+      final List<dynamic> responseData = json.decode(response.body);
+      List<Medicity> types = responseData.map((typeData) {
+        return Medicity(
+          typeData['id'],
+          typeData['name'],
+        );
+      }).toList();
 
-      if (response.statusCode == 200) {
-        final List<dynamic> responseData = json.decode(response.body);
-        List<Medicity> types = responseData.map((typeData) {
-          return Medicity(
-            typeData['id'],
-            typeData['name'],
-          );
-        }).toList();
-
-        return types;
-      } else {
-        print('Error en la solicitud: ${response.statusCode}');
-        return [];
-      }
+      return types;
+    } else {
+      print('Error en la solicitud: ${response.statusCode}');
     }
 
     return [];
   }
 
   Future<List<Appointment>> _fetchAppointments() async {
-    final savedUser = userBox.get('user');
-    if (savedUser != null && savedUser.token != null) {
-      final apiUrl = 'https://medicity.edarkea.com/api/appointment';
+    final apiUrl = 'https://medicity.edarkea.com/api/appointment';
 
-      final response = await http.get(
-        Uri.parse(apiUrl),
-        headers: <String, String>{
-          'auth-token': '${savedUser.token}',
-        },
-      );
+    final response = await http.get(
+      Uri.parse(apiUrl),
+      headers: <String, String>{
+        'auth-token': token,
+      },
+    );
 
-      if (response.statusCode == 200) {
-        final List<dynamic> responseData = json.decode(response.body);
-        List<Appointment> appointments = responseData.map((appointmentData) {
-          return Appointment(
-            appointmentData['id'],
-            appointmentData['schedule'],
-            appointmentData['description'],
-            appointmentData['repetatEach'],
-            appointmentData['createAt'],
-            appointmentData['updateAt'],
-            Type(
-              appointmentData['appointmentType']['id'],
-              appointmentData['appointmentType']['name'],
-              appointmentData['appointmentType']['role'],
-              appointmentData['appointmentType']['createAt'],
-              appointmentData['appointmentType']['updateAt'],
-            ),
-          );
-        }).toList();
+    if (response.statusCode == 200) {
+      final List<dynamic> responseData = json.decode(response.body);
+      List<Appointment> appointments = responseData.map((appointmentData) {
+        return Appointment(
+          appointmentData['id'],
+          appointmentData['schedule'],
+          appointmentData['description'],
+          appointmentData['repetatEach'],
+          appointmentData['createAt'],
+          appointmentData['updateAt'],
+          Type(
+            appointmentData['appointmentType']['id'],
+            appointmentData['appointmentType']['name'],
+            appointmentData['appointmentType']['role'],
+            appointmentData['appointmentType']['createAt'],
+            appointmentData['appointmentType']['updateAt'],
+          ),
+        );
+      }).toList();
 
-        return appointments;
-      } else {
-        print('Error en la solicitud: ${response.statusCode}');
-        return [];
-      }
+      return appointments;
+    } else {
+      print('Error en la solicitud: ${response.statusCode}');
     }
-
     return [];
   }
 
@@ -747,19 +762,19 @@ class _HomeState extends State<Home> {
       if (schedule != null && schedule != "NaN" && schedule.isNotEmpty) {
         int timestamp = int.parse(schedule);
         DateTime dateTime = DateTime.fromMillisecondsSinceEpoch(timestamp);
-        dateTime=dateTime.toUtc();
-        DateTime dateTimeAtMidnight = DateTime.utc(dateTime.year, dateTime.month, dateTime.day);
+        dateTime = dateTime.toUtc();
+        DateTime dateTimeAtMidnight =
+            DateTime.utc(dateTime.year, dateTime.month, dateTime.day);
         if (!eventsMap.containsKey(dateTimeAtMidnight)) {
           eventsMap[dateTimeAtMidnight] = [];
         }
 
         String category = appointment.appointmentType.name ?? '';
         Event event = Event(
-          category,
-          appointment.description,
-          TimeOfDay(hour: dateTime.hour, minute: dateTime.minute),
-          appointment.id
-        );
+            category,
+            appointment.description,
+            TimeOfDay(hour: dateTime.hour - 5, minute: dateTime.minute),
+            appointment.id);
 
         eventsMap[dateTimeAtMidnight]!.add(event);
       }
@@ -768,89 +783,71 @@ class _HomeState extends State<Home> {
     return eventsMap;
   }
 
-  Future<void> createAppointment({
-    required int id,
-    required String schedule,
-    required String description,
-    required int repeatEvery,
-    required int appointmentType,
-    int? medicity
-  }) async {
+  Future<void> createAppointment(
+      {required int id,
+      required String schedule,
+      required String description,
+      required int repeatEvery,
+      required int appointmentType,
+      int? medicity}) async {
     final apiUrl = 'https://medicity.edarkea.com/api/appointment';
-    final savedUser = userBox.get('user');
-    if (savedUser != null && savedUser.token != null) {
-      final appointmentData = {
-        "id": id,
-        "schedule": schedule,
-        "description": description,
-        "repetatEach": repeatEvery,
-        "appointmentType": appointmentType,
-        "medicity": medicity,
-      };
 
-      final headers = {
-        'auth-token': '${savedUser.token}',
-        'Content-Type': 'application/json',
-      };
-      final response = await http.post(
-        Uri.parse(apiUrl),
-        headers: headers,
-        body: json.encode(appointmentData),
-      );
-    }
+    final appointmentData = {
+      "id": id,
+      "schedule": schedule,
+      "description": description,
+      "repetatEach": repeatEvery,
+      "appointmentType": appointmentType,
+      "medicity": medicity,
+    };
 
+    final headers = {
+      'auth-token': token,
+      'Content-Type': 'application/json',
+    };
+    final response = await http.post(
+      Uri.parse(apiUrl),
+      headers: headers,
+      body: json.encode(appointmentData),
+    );
   }
 
-  Future<void> updateAppointment({
-    required int id,
-    required String schedule,
-    required String description,
-    required int repeatEvery,
-    required int appointmentType
-  }) async {
-    final apiUrl = 'https://medicity.edarkea.com/api/appointment/update/'+id.toString();
-    final savedUser = userBox.get('user');
-    if (savedUser != null && savedUser.token != null) {
-      final appointmentData = {
-        "id": id,
-        "schedule": schedule,
-        "description": description,
-        "repetatEach": repeatEvery,
-        "appointmentType": appointmentType,
-      };
+  Future<void> updateAppointment(
+      {required int id,
+      required String schedule,
+      required String description,
+      required int repeatEvery,
+      required int appointmentType}) async {
+    final apiUrl =
+        'https://medicity.edarkea.com/api/appointment/update/' + id.toString();
+    final appointmentData = {
+      "id": id,
+      "schedule": schedule,
+      "description": description,
+      "repetatEach": repeatEvery,
+      "appointmentType": appointmentType,
+    };
 
-      final headers = {
-        'auth-token': '${savedUser.token}',
-        'Content-Type': 'application/json',
-      };
+    final headers = {
+      'auth-token': token,
+      'Content-Type': 'application/json',
+    };
 
-      final response = await http.put(
-        Uri.parse(apiUrl),
-        headers: headers,
-        body: json.encode(appointmentData),
-      );
-    }
-
+    final response = await http.put(
+      Uri.parse(apiUrl),
+      headers: headers,
+      body: json.encode(appointmentData),
+    );
   }
 
-  Future<void> deleteAppointment({
-    required int id
-  }) async {
-    final apiUrl = 'https://medicity.edarkea.com/api/appointment/delete/'+id.toString();
-    final savedUser = userBox.get('user');
-    if (savedUser != null && savedUser.token != null) {
+  Future<void> deleteAppointment({required int id}) async {
+    final apiUrl =
+        'https://medicity.edarkea.com/api/appointment/delete/' + id.toString();
+    final headers = {
+      'auth-token': token,
+      'Content-Type': 'application/json',
+    };
 
-      final headers = {
-        'auth-token': '${savedUser.token}',
-        'Content-Type': 'application/json',
-      };
-
-      final response = await http.delete(
-        Uri.parse(apiUrl),
-        headers: headers
-      );
-    }
-
+    final response = await http.delete(Uri.parse(apiUrl), headers: headers);
   }
-
 }

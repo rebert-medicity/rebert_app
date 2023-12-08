@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
-import 'package:hive_flutter/hive_flutter.dart';
 import 'package:rebert_app/models/users.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -123,30 +122,23 @@ class _LoginState extends State<Login> {
                               _controllerUsername.text,
                               _controllerPassword.text);
                           // Guarda el usuario en la caja
+                          SharedPreferences prefs =
+                              await SharedPreferences.getInstance();
                           if (userLogin != null) {
-                            if (await Hive.boxExists('userBox')) {
-                              final userBox = await Hive.openBox<User>('userBox');
-                              await userBox.put('user', userLogin!);
-                              Navigator.pushReplacement(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) {
-                                    return Home();
-                                  },
-                                ),
-                              );
-                            }else{
-                              final userBox = await Hive.openBox<User>('userBox');
-                              await userBox.put('user', userLogin!);
-                              Navigator.pushReplacement(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) {
-                                    return Home();
-                                  },
-                                ),
-                              );
-                            }
+                            //Guardar en la memoria cache
+                            await prefs.setInt('id', userLogin.id ?? -1);
+                            await prefs.setString('username', userLogin.username ?? '');
+                            await prefs.setString('fullname', (userLogin.firstName ?? '') + " " + (userLogin.lastName ?? ''));
+                            await prefs.setString('token', userLogin.token ?? '');
+                            await prefs.setString('role', userLogin.role ?? '');
+                            Navigator.pushReplacement(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) {
+                                  return Home();
+                                },
+                              ),
+                            );
                           } else {
                             // Actualizar el mensaje de error
                             setState(() {

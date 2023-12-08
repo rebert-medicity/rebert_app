@@ -1,4 +1,3 @@
-
 import 'package:hive/hive.dart';
 
 @HiveType(typeId: 0)
@@ -27,7 +26,16 @@ class User {
   @HiveField(7)
   final String? token;
 
-  User(this.id, this.username, this.password, this.firstName, this.lastName, this.email, this.role, this.token);
+  User(this.id, this.username, this.password, this.firstName, this.lastName,
+      this.email, this.role, this.token);
+
+  Map toJson() => {
+        'id': id,
+        'username': username,
+        'firstName': firstName,
+        'lastName': lastName,
+        'token': token,
+      };
 }
 
 class UserAdapter extends TypeAdapter<User> {
@@ -46,20 +54,27 @@ class UserAdapter extends TypeAdapter<User> {
     final role = reader.read(6); // Índice 6 para el campo 'role'
     final token = reader.read(7); // Índice 7 para el campo 'token'
 
-    return User(id, username, password, firstName, lastName, email, role, token);
+    return User(
+        id, username, password, firstName, lastName, email, role, token);
   }
 
   @override
   void write(BinaryWriter writer, User obj) {
     // Escribe los campos de User en la caja binaria, utilizando valores predeterminados si son nulos
     writer.write(obj.id ?? 0); // Valor predeterminado 0 para id si es nulo
-    writer.write(obj.username ?? ''); // Valor predeterminado cadena vacía si es nulo
-    writer.write(obj.password ?? ''); // Valor predeterminado cadena vacía si es nulo
-    writer.write(obj.firstName ?? ''); // Valor predeterminado cadena vacía si es nulo
-    writer.write(obj.lastName ?? ''); // Valor predeterminado cadena vacía si es nulo
-    writer.write(obj.email ?? ''); // Valor predeterminado cadena vacía si es nulo
-    writer.write(obj.role ?? ''); // Valor predeterminado cadena vacía si es nulo
-    writer.write(obj.token ?? ''); // Valor predeterminado cadena vacía si es nulo
+    writer.write(
+        obj.username ?? ''); // Valor predeterminado cadena vacía si es nulo
+    writer.write(
+        obj.password ?? ''); // Valor predeterminado cadena vacía si es nulo
+    writer.write(
+        obj.firstName ?? ''); // Valor predeterminado cadena vacía si es nulo
+    writer.write(
+        obj.lastName ?? ''); // Valor predeterminado cadena vacía si es nulo
+    writer
+        .write(obj.email ?? ''); // Valor predeterminado cadena vacía si es nulo
+    writer
+        .write(obj.role ?? ''); // Valor predeterminado cadena vacía si es nulo
+    writer
+        .write(obj.token ?? ''); // Valor predeterminado cadena vacía si es nulo
   }
-
 }
